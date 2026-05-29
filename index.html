@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buon Compleanno Diego!</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #ffeaa7; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Arial', sans-serif; overflow: hidden; }
+        #game-container { position: relative; }
+        canvas { background: #dfe6e9; border: 4px solid #fdcb6e; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); max-width: 100%; }
+        #score { font-size: 28px; font-weight: bold; margin-bottom: 15px; color: #d63031; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        .instructions { margin-top: 15px; color: #2d3436; font-size: 16px; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="score">🎁 Punti: 0</div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="300"></canvas>
+    </div>
+    <div class="instructions">Premi SPAZIO o TOCCA lo schermo per far saltare Diego!</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+
+        // IMMAGINI DEL GIOCO
+        const playerImg = new Image();
+        playerImg.src = "diego.png"; 
+
+        const obstacleImg = new Image();
+        obstacleImg.src = "pene.png"; // Ostacolo basso
+
+        const prizeImg = new Image();
+        prizeImg.src = "vag.png"; // Premio alto volante
+
+        let score = 0;
+        let gameOver = false;
+        let gameWon = false;
+        const winCondition = 150; 
+        
+        const player = {
+            x: 60,
+            y: 220,          
+            width: 60,       
+            height: 60,      
+            gravity: 0.6,
+            velocity: 0,
+            jumpForce: -13,  
+            isGrounded: true
+        };
+
+        const objects = []; // Array unico per ostacoli e premi
+        let spawnTimer = 0;
+
+        function spawnObject() {
+            // Sceglie a caso se lanciare un ostacolo basso (0) o un premio alto (1)
+            const type = Math.random() > 0.5 ? 'obstacle' : 'prize';
+            
+            if (type === 'obstacle') {
+                const obsHeight = 80;
+                objects.push({
+                    type: 'obstacle',
+                    x: canvas.width,
+                    y: canvas.height - obsHeight - 20, // A terra
+                    width: 45,
+                    height: obsHeight,
+                    speed: 5 + (score / 30)
+                });
+            } else {
+                objects.push({
+                    type: 'prize',
+                    x: canvas.width,
+                    y: canvas.height - 180, // In aria (altezza perfetta per il salto)
+                    width: 50,
+                    height: 50,
+                    speed: 5 + (score / 30)
+                });
+            }
+        }
+
+        function jump() {
+            if (player.isGrounded && !gameOver && !gameWon) {
+                player.velocity = player.jumpForce;
+                player.isGrounded = false;
+            } else if (gameOver || gameWon) {
+                resetGame();
+            }
+        }
+
+        window.addEventListener("keydown", (e) => { if (e.code === "Space") jump(); });
+        canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jump(); });
+
+        function resetGame() {
+            objects.length = 0;
+            score = 0;
+            player.y = 220;
+            player.velocity = 0;
+            gameOver = false;
+            gameWon = false;
+            scoreElement.innerText = "🎁 Punti: 0";
+            loop();
+        }
+
+        function drawBackground() {
+            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, "#74b9ff");
+            gradient.addColorStop(1, "#a29bfe");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#55efc4";
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+            ctx.fillStyle = "#00b894";
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 4);
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.font = "bold 24px Arial";
+            ctx.fillText("Diego's Birthday Party 🎉", canvas.width - 280, 40);
+        }
+
+        function loop() {
+            if (gameWon) {
+                ctx.fillStyle = "rgba(214, 48, 49, 0.9)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "center";
+                ctx.font = "bold 40px Arial";
+                ctx.fillText("🎉 TANTI AUGURI DIEGO! 🎂", canvas.width/2, canvas.height/2 - 20);
+                ctx.font = "20px Arial";
+                ctx.fillText("Hai completato la sfida! Tocca per rigiocare.", canvas.width/2, canvas.height/2 + 30);
+                ctx.textAlign = "start";
+                return;
+            }
+
+            if (gameOver) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "center";
+                ctx.font = "bold 30px Arial";
+                ctx.fillText("OH NO! Ti sei scontrato 💥", canvas.width/2, canvas.height/2 - 10);
+                ctx.font = "20px Arial";
+                ctx.fillText("Tocca qui per riprovare", canvas.width/2, canvas.height/2 + 30);
+                ctx.textAlign = "start";
+                return;
+            }
+
+            requestAnimationFrame(loop);
+            drawBackground();
+
+            player.velocity += player.gravity;
+            player.y += player.velocity;
+
+            if (player.y >= canvas.height - player.height - 20) {
+                player.y = canvas.height - player.height - 20;
+                player.velocity = 0;
+                player.isGrounded = true;
+            }
+
+            // Disegna Diego
+            if (playerImg.complete && playerImg.naturalWidth !== 0) {
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+            } else {
+                ctx.fillStyle = "#e84393";
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // Generazione elementi a tempo variabile
+            spawnTimer++;
+            if (spawnTimer % 90 === 0) {
+                spawnObject();
+            }
+
+            for (let i = objects.length - 1; i >= 0; i--) {
+                let obj = objects[i];
+                obj.x -= obj.speed;
+
+                // Disegno in base al tipo
+                if (obj.type === 'obstacle') {
+                    if (obstacleImg.complete && obstacleImg.naturalWidth !== 0) {
+                        ctx.drawImage(obstacleImg, obj.x, obj.y, obj.width, obj.height);
+                    } else {
+                        ctx.fillStyle = "#d63031"; // Rosso se manca l'immagine
+                        ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+                    }
+                } else {
+                    if (prizeImg.complete && prizeImg.naturalWidth !== 0) {
+                        ctx.drawImage(prizeImg, obj.x, obj.y, obj.width, obj.height);
+                    } else {
+                        ctx.fillStyle = "#e84393"; // Rosa se manca l'immagine
+                        ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+                    }
+                }
+
+                // Controllo Collisione (Rilevamento contatto)
+                if (
+                    player.x < obj.x + obj.width &&
+                    player.x + player.width > obj.x &&
+                    player.y < obj.y + obj.height &&
+                    player.y + player.height > obj.y
+                ) {
+                    if (obj.type === 'obstacle') {
+                        gameOver = true; // Se tocca l'ostacolo perde
+                    } else {
+                        // Se prende il premio volante: aggiunge punti e lo fa sparire
+                        score += 20; 
+                        scoreElement.innerText = "🎁 Punti: " + score;
+                        objects.splice(i, 1);
+                        
+                        if (score >= winCondition) {
+                            gameWon = true;
+                        }
+                        continue;
+                    }
+                }
+
+                // Se l'ostacolo passa senza toccarlo, dà un piccolo punteggio standard
+                if (obj.x + obj.width < 0) {
+                    if (obj.type === 'obstacle') {
+                        score += 10;
+                        scoreElement.innerText = "🎁 Punti: " + score;
+                    }
+                    objects.splice(i, 1);
+                    
+                    if (score >= winCondition) {
+                        gameWon = true;
+                    }
+                }
+            }
+        }
+
+        loop();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
