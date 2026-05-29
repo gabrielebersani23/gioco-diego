@@ -3,82 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buon Compleanno Diego!</title>
+    <title>Diego's Epic Birthday Quest 🎉</title>
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #ffeaa7; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Arial', sans-serif; overflow: hidden; }
-        #game-container { position: relative; }
-        canvas { background: #dfe6e9; border: 4px solid #fdcb6e; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); max-width: 100%; }
-        #score { font-size: 28px; font-weight: bold; margin-bottom: 15px; color: #d63031; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
-        .instructions { margin-top: 15px; color: #2d3436; font-size: 16px; font-weight: bold; text-align: center; }
+        body { 
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            overflow: hidden; 
+        }
+        #game-container { 
+            position: relative; 
+            border: 6px solid #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        canvas { background: #000; display: block; max-width: 100%; }
+        #score-board {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            font-size: 26px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-family: 'Arial Black', sans-serif;
+            z-index: 10;
+        }
+        .instructions { 
+            margin-top: 20px; 
+            color: #fff; 
+            font-size: 16px; 
+            font-weight: 600; 
+            text-align: center; 
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.03); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="score">🎁 Punti: 0</div>
     <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="300"></canvas>
+        <div id="score-board">✨ PUNTI: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="850" height="350"></canvas>
     </div>
-    <div class="instructions">Premi SPAZIO o TOCCA lo schermo per far saltare Diego!</div>
+    <div class="instructions">TOCCA LO SCHERMO o PREMI SPAZIO per saltare!</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const scoreElement = document.getElementById("score");
 
-        // IMMAGINI DEL GIOCO
-        const playerImg = new Image();
-        playerImg.src = "diego.jpeg"; 
-
-        const obstacleImg = new Image();
-        obstacleImg.src = "pene.png"; // Ostacolo basso
-
-        const prizeImg = new Image();
-        prizeImg.src = "vag.png"; // Premio alto volante
+        // CARICAMENTO IMMAGINI (Con i tuoi nomi esatti e sistema anti-cache)
+        const playerImg = new Image(); playerImg.src = "diego.png?v=" + Date.now();
+        const obstacleImg = new Image(); obstacleImg.src = "pene.png?v=" + Date.now();
+        const prizeImg = new Image(); prizeImg.src = "vagina.png?v=" + Date.now();
 
         let score = 0;
         let gameOver = false;
         let gameWon = false;
-        const winCondition = 150; 
-        
+        const winCondition = 200; 
+        let gameTime = 0;
+
+        // SISTEMA PARTICELLE (Esplosioni e Scie)
+        let particles = [];
+        function createExplosion(x, y, color, count=15) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 4 + 2,
+                    color: color,
+                    alpha: 1,
+                    life: Math.random() * 20 + 20
+                });
+            }
+        }
+
+        // PARALLASSE (Nuvole)
+        const clouds = [
+            {x: 100, y: 40, size: 40, speed: 0.3},
+            {x: 450, y: 70, size: 60, speed: 0.2},
+            {x: 700, y: 30, size: 35, speed: 0.4}
+        ];
+
+        // PROPRIETÀ GIOCATORE (Diego)
         const player = {
-            x: 60,
-            y: 220,          
-            width: 60,       
-            height: 60,      
-            gravity: 0.6,
-            velocity: 0,
-            jumpForce: -13,  
-            isGrounded: true
+            x: 80, y: 250,
+            width: 65, height: 65,
+            gravity: 0.6, velocity: 0, jumpForce: -13.5,
+            isGrounded: true,
+            rotation: 0,
+            squashX: 1, squashY: 1
         };
 
-        const objects = []; // Array unico per ostacoli e premi
+        const entities = [];
         let spawnTimer = 0;
 
-        function spawnObject() {
-            // Sceglie a caso se lanciare un ostacolo basso (0) o un premio alto (1)
-            const type = Math.random() > 0.5 ? 'obstacle' : 'prize';
-            
-            if (type === 'obstacle') {
-                const obsHeight = 80;
-                objects.push({
-                    type: 'obstacle',
-                    x: canvas.width,
-                    y: canvas.height - obsHeight - 20, // A terra
-                    width: 45,
-                    height: obsHeight,
-                    speed: 5 + (score / 30)
+        function spawnEntity() {
+            const isPrize = Math.random() > 0.45;
+            if (isPrize) {
+                entities.push({
+                    type: 'prize',
+                    x: canvas.width, y: Math.random() * 80 + 110,
+                    width: 45, height: 45,
+                    speed: 5.5 + (score / 40),
+                    pulse: 0
                 });
             } else {
-                objects.push({
-                    type: 'prize',
-                    x: canvas.width,
-                    y: canvas.height - 180, // In aria (altezza perfetta per il salto)
-                    width: 50,
-                    height: 50,
-                    speed: 5 + (score / 30)
+                entities.push({
+                    type: 'obstacle',
+                    x: canvas.width, y: canvas.height - 95,
+                    width: 50, height: 75,
+                    speed: 5.5 + (score / 40)
                 });
             }
         }
@@ -87,6 +137,7 @@
             if (player.isGrounded && !gameOver && !gameWon) {
                 player.velocity = player.jumpForce;
                 player.isGrounded = false;
+                player.squashX = 0.8; player.squashY = 1.2;
             } else if (gameOver || gameWon) {
                 resetGame();
             }
@@ -96,150 +147,184 @@
         canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jump(); });
 
         function resetGame() {
-            objects.length = 0;
-            score = 0;
-            player.y = 220;
-            player.velocity = 0;
-            gameOver = false;
-            gameWon = false;
-            scoreElement.innerText = "🎁 Punti: 0";
+            entities.length = 0; particles.length = 0;
+            score = 0; player.y = 250; player.velocity = 0; player.rotation = 0;
+            gameOver = false; gameWon = false;
+            scoreElement.innerText = score;
             loop();
         }
 
-        function drawBackground() {
-            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, "#74b9ff");
-            gradient.addColorStop(1, "#a29bfe");
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function updateAndDrawBackground() {
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            sky.addColorStop(0, "#0f172a");
+            sky.addColorStop(0.6, "#1e3a8a");
+            sky.addColorStop(1, "#3b82f6");
+            ctx.fillStyle = sky; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = "#55efc4";
-            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
-            ctx.fillStyle = "#00b894";
-            ctx.fillRect(0, canvas.height - 20, canvas.width, 4);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+            clouds.forEach(c => {
+                c.x -= c.speed;
+                if(c.x + c.size * 2 < 0) c.x = canvas.width + c.size;
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size*0.6, c.y - c.size*0.3, c.size*0.8, 0, Math.PI * 2);
+                ctx.arc(c.x - c.size*0.6, c.y, c.size*0.7, 0, Math.PI * 2);
+                ctx.fill();
+            });
 
-            ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-            ctx.font = "bold 24px Arial";
-            ctx.fillText("Diego's Birthday Party 🎉", canvas.width - 280, 40);
+            ctx.fillStyle = "#1d4ed8";
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height); ctx.lineTo(150, 180); ctx.lineTo(350, canvas.height);
+            ctx.lineTo(500, 200); ctx.lineTo(700, canvas.height); ctx.lineTo(850, 160); ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+
+            ctx.fillStyle = "#047857"; ctx.fillRect(0, canvas.height - 25, canvas.width, 25);
+            ctx.fillStyle = "#10b981"; ctx.fillRect(0, canvas.height - 25, canvas.width, 5);
+        }
+
+        function updateParticles() {
+            for(let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                p.alpha -= 1 / p.life;
+                if(p.alpha <= 0) { particles.splice(i, 1); }
+                else {
+                    ctx.save();
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                    ctx.restore();
+                }
+            }
         }
 
         function loop() {
-            if (gameWon) {
-                ctx.fillStyle = "rgba(214, 48, 49, 0.9)";
+            if (gameWon || gameOver) {
+                ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "#fff";
-                ctx.textAlign = "center";
-                ctx.font = "bold 40px Arial";
-                ctx.fillText("🎉 TANTI AUGURI DIEGO! 🎂", canvas.width/2, canvas.height/2 - 20);
-                ctx.font = "20px Arial";
-                ctx.fillText("Sei etero.", canvas.width/2, canvas.height/2 + 30);
-                ctx.textAlign = "start";
-                return;
-            }
-
-            if (gameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "#fff";
-                ctx.textAlign = "center";
-                ctx.font = "bold 30px Arial";
-                ctx.fillText("OH NO! Ti sei gay 💥", canvas.width/2, canvas.height/2 - 10);
-                ctx.font = "20px Arial";
-                ctx.fillText("Tocca qui per riprovare", canvas.width/2, canvas.height/2 + 30);
-                ctx.textAlign = "start";
-                return;
+                ctx.textAlign = "center"; ctx.fillStyle = "#fff";
+                
+                if(gameWon) {
+                    ctx.font = "bold 44px sans-serif";
+                    ctx.fillStyle = "#fbbf24";
+                    ctx.fillText("🎉 TRAGUARDO RAGGIUNTO! 🎉", canvas.width/2, canvas.height/2 - 20);
+                    ctx.font = "bold 26px sans-serif"; ctx.fillStyle = "#fff";
+                    ctx.fillText("BUON COMPLEANNO DIEGO!", canvas.width/2, canvas.height/2 + 25);
+                } else {
+                    ctx.font = "bold 40px sans-serif"; ctx.fillStyle = "#ef4444";
+                    ctx.fillText("💥 GAME OVER 💥", canvas.width/2, canvas.height/2 - 10);
+                    ctx.font = "20px sans-serif"; ctx.fillStyle = "#94a3b8";
+                    ctx.fillText("Tocca lo schermo per riprovare", canvas.width/2, canvas.height/2 + 30);
+                }
+                ctx.textAlign = "start"; return;
             }
 
             requestAnimationFrame(loop);
-            drawBackground();
+            gameTime++;
+            updateAndDrawBackground();
 
-            player.velocity += player.gravity;
-            player.y += player.velocity;
+            player.velocity += player.gravity; player.y += player.velocity;
 
-            if (player.y >= canvas.height - player.height - 20) {
-                player.y = canvas.height - player.height - 20;
+            if (player.y >= canvas.height - player.height - 25) {
+                player.y = canvas.height - player.height - 25;
                 player.velocity = 0;
-                player.isGrounded = true;
+                if(!player.isGrounded) {
+                    player.isGrounded = true; player.rotation = 0;
+                    player.squashX = 1.3; player.squashY = 0.7;
+                }
             }
 
-            // Disegna Diego
-            if (playerImg.complete && playerImg.naturalWidth !== 0) {
-                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+            player.squashX += (1 - player.squashX) * 0.15;
+            player.squashY += (1 - player.squashY) * 0.15;
+
+            if(player.isGrounded && gameTime % 5 === 0) {
+                particles.push({
+                    x: player.x, y: canvas.height - 30, vx: -Math.random()*3 - 1, vy: -Math.random()*1,
+                    size: Math.random()*3 + 1, color: "rgba(255,255,255,0.4)", alpha: 1, life: 15
+                });
+            }
+
+            // RENDERING DIEGO ANIMATO
+            ctx.save();
+            ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+            if (!player.isGrounded) {
+                player.rotation += 0.12; 
+                ctx.rotate(player.rotation);
             } else {
-                ctx.fillStyle = "#e84393";
-                ctx.fillRect(player.x, player.y, player.width, player.height);
+                ctx.rotate(Math.sin(gameTime * 0.2) * 0.03);
             }
+            ctx.scale(player.squashX, player.squashY);
 
-            // Generazione elementi a tempo variabile
+            if (playerImg.complete && playerImg.naturalWidth !== 0) {
+                        // Disegna l'immagine del giocatore o un quadrato rosa di backup
+            if (playerImg.complete && playerImg.naturalWidth !== 0) {
+                ctx.drawImage(playerImg, -player.width / 2, -player.height / 2, player.width, player.height);
+            } else {
+                ctx.fillStyle = "#ec4899"; 
+                ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            }
+            ctx.restore();
+
+            // GENERAZIONE OSTACOLI/PREMI
             spawnTimer++;
-            if (spawnTimer % 90 === 0) {
-                spawnObject();
+            if (spawnTimer % 85 === 0) {
+                spawnEntity();
             }
+            
+            updateParticles();
 
-            for (let i = objects.length - 1; i >= 0; i--) {
-                let obj = objects[i];
-                obj.x -= obj.speed;
+            // Ciclo per gestire il movimento e le collisioni di ostacoli e premi
+            for (let i = entities.length - 1; i >= 0; i--) {
+                let ent = entities[i];
+                ent.x -= ent.speed;
 
-                // Disegno in base al tipo
-                if (obj.type === 'obstacle') {
+                ctx.save();
+                if (ent.type === 'obstacle') {
                     if (obstacleImg.complete && obstacleImg.naturalWidth !== 0) {
-                        ctx.drawImage(obstacleImg, obj.x, obj.y, obj.width, obj.height);
+                        ctx.drawImage(obstacleImg, ent.x, ent.y, ent.width, ent.height);
                     } else {
-                        ctx.fillStyle = "#d63031"; // Rosso se manca l'immagine
-                        ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+                        ctx.fillStyle = "#ef4444"; 
+                        ctx.fillRect(ent.x, ent.y, ent.width, ent.height);
                     }
                 } else {
+                    ent.pulse += 0.1;
+                    let pulseScale = Math.sin(ent.pulse) * 4;
                     if (prizeImg.complete && prizeImg.naturalWidth !== 0) {
-                        ctx.drawImage(prizeImg, obj.x, obj.y, obj.width, obj.height);
+                        ctx.drawImage(prizeImg, ent.x, ent.y + pulseScale, ent.width, ent.height);
                     } else {
-                        ctx.fillStyle = "#e84393"; // Rosa se manca l'immagine
-                        ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+                        ctx.fillStyle = "#eab308"; 
+                        ctx.fillRect(ent.x, ent.y + pulseScale, ent.width, ent.height);
                     }
                 }
+                ctx.restore();
 
-                // Controllo Collisione (Rilevamento contatto)
+                // COLLISIONI PRECISE
                 if (
-                    player.x < obj.x + obj.width &&
-                    player.x + player.width > obj.x &&
-                    player.y < obj.y + obj.height &&
-                    player.y + player.height > obj.y
+                    player.x < ent.x + ent.width - 5 &&
+                    player.x + player.width - 5 > ent.x &&
+                    player.y < ent.y + ent.height - 5 &&
+                    player.y + player.height - 5 > ent.y
                 ) {
-                    if (obj.type === 'obstacle') {
-                        gameOver = true; // Se tocca l'ostacolo perde
+                    if (ent.type === 'obstacle') {
+                        createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#ef4444", 25);
+                        gameOver = true;
                     } else {
-                        // Se prende il premio volante: aggiunge punti e lo fa sparire
-                        score += 20; 
-                        scoreElement.innerText = "🎁 Punti: " + score;
-                        objects.splice(i, 1);
-                        
-                        if (score >= winCondition) {
-                            gameWon = true;
-                        }
+                        createExplosion(ent.x + ent.width / 2, ent.y + ent.height / 2, "#fde047", 20);
+                        score += 25;
+                        scoreElement.innerText = score;
+                        entities.splice(i, 1);
+                        if (score >= winCondition) gameWon = true;
                         continue;
                     }
                 }
 
-                // Se l'ostacolo passa senza toccarlo, dà un piccolo punteggio standard
-                if (obj.x + obj.width < 0) {
-                    if (obj.type === 'obstacle') {
+                // Superamento dell'ostacolo senza collisione
+                if (ent.x + ent.width < 0) {
+                    if (ent.type === 'obstacle') {
                         score += 10;
-                        scoreElement.innerText = "🎁 Punti: " + score;
+                        scoreElement.innerText = score;
                     }
-                    objects.splice(i, 1);
-                    
-                    if (score >= winCondition) {
-                        gameWon = true;
-                    }
+                    entities.splice(i, 1);
+                    if (score >= winCondition) gameWon = true;
                 }
             }
-        }
-
-        loop();
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
-        }
-    </script>
-</body>
-</html>
